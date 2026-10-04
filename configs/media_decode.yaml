@@ -1,0 +1,19 @@
+media:
+  target_fps: 50
+  pixel_format: bgr24
+  fps_tolerance: 0.5
+  timestamp_tolerance_ms: 10.0
+  fail_on_low_fps: true
+  fallback_when_pts_missing: true
+
+image_sequence:
+  source_fps: 50
+  frame_pattern: '_(?P<frame_id>\d{6})\.(?:jpg|jpeg|png)$'
+  extensions: [.jpg, .jpeg, .png]
+  require_contiguous: true
+
+queue:
+  batch_size: 27
+  prefetch_batches: 2
+  capacity: 54
+  put_timeout_seconds: 0.5

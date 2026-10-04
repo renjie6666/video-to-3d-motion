@@ -11,7 +11,6 @@ venv/
 data/
 datasets/
 outputs/
-results/
 checkpoints/
 weights/
 wandb/
@@ -29,3 +28,9 @@ wandb/
 .idea/
 .DS_Store
 Thumbs.db
+human3.6/
+human3.6mtoolbox处理后的/
+
+results/*
+!results/.gitkeep
+*.egg-info/
