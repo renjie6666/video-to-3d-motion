@@ -1,0 +1,31 @@
+# Local logs
+*.log
+
+# Python caches and virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Experiment outputs and model artifacts
+data/
+datasets/
+outputs/
+results/
+checkpoints/
+weights/
+wandb/
+*.ckpt
+*.pth
+*.pt
+
+# Secrets and local environment files
+.env
+.env.*
+!.env.example
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
