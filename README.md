@@ -45,3 +45,7 @@ Get-Content results\image_frame_tasks.jsonl -TotalCount 5
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
+
+## 开发与提交规范
+
+项目采用结构化 Git 提交模板。提交标题遵循 Conventional Commits，正文记录变更动机、验证结果以及实验与数据影响。首次克隆后的配置方法和完整示例见 [CONTRIBUTING.md](CONTRIBUTING.md)。

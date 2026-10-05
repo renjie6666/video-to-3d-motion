@@ -1,0 +1,28 @@
+<type>(<scope>): <summary>
+
+背景与目的：
+- 
+
+改动内容：
+- 
+
+验证方式与结果：
+- 命令：
+- 结果：
+
+实验与数据影响：
+- 数据集/配置：无
+- 指标或结果：无
+- 可复现性影响：无
+
+关联事项：
+- Issue/任务：无
+- BREAKING CHANGE：无
+
+# 请替换标题中的占位符；正文不适用的字段填写“无”，不要直接删除。
+# 标题格式：<type>(<scope>): <summary>
+# type：feat | fix | refactor | perf | test | docs | build | ci | chore | data | exp
+# scope：decode | pose2d | pose3d | completion | prediction | generation | eval | config | docs
+# summary 使用简洁的祈使句，不加句号，建议不超过 50 个字符。
+# 正文每行建议不超过 72 个字符，并写明实际执行的验证命令和结果。
+
