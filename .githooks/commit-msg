@@ -1,0 +1,27 @@
+#!/bin/sh
+
+repo_root=$(git rev-parse --show-toplevel) || exit 1
+validator="$repo_root/tools/validate_commit_message.py"
+
+if [ -x "$repo_root/.venv/Scripts/python.exe" ]; then
+  exec "$repo_root/.venv/Scripts/python.exe" "$validator" "$1"
+fi
+
+if [ -x "$repo_root/.venv/bin/python" ]; then
+  exec "$repo_root/.venv/bin/python" "$validator" "$1"
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+  exec python3 "$validator" "$1"
+fi
+
+if command -v python >/dev/null 2>&1; then
+  exec python "$validator" "$1"
+fi
+
+if command -v py >/dev/null 2>&1; then
+  exec py -3 "$validator" "$1"
+fi
+
+echo "ERROR: Python 3.10+ is required to validate commit messages." >&2
+exit 1
