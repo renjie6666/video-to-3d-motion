@@ -33,4 +33,5 @@ human3.6mtoolbox处理后的/
 
 results/*
 !results/.gitkeep
+resources/pose2d_visualizations/
 *.egg-info/

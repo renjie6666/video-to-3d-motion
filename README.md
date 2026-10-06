@@ -40,6 +40,33 @@ Get-Content results\image_frame_tasks.jsonl -TotalCount 5
 
 当前命令是S1-01验证命令。它内置诊断接收循环，持续从队列取出任务以生成汇总和JSONL，尚未接入S1-02二维姿态处理。
 
+## S1-02开发链路验证
+
+S1-02只支持AutoDL等Linux CUDA环境中的真实RTMDet＋RTMPose链路。程序固定使用第一张可见GPU，即`cuda:0`；CUDA不可用时立即失败，不回退CPU。
+
+建议在AutoDL选择PyTorch 2.1.2、Python 3.10、CUDA 11.8镜像。代码放在`/root/video-to-3d-motion`，模型权重、结果和叠加图放在`/root/autodl-tmp`。安装顺序是：先确认镜像自带的CUDA版PyTorch可用，再安装匹配的MMCV、MMDetection 3.3.0和MMPose 1.3.2，最后安装本项目。不要在安装OpenMMLab组件时覆盖镜像中的PyTorch。
+
+启动前检查：
+
+```bash
+python -c "import torch; print(torch.__version__, torch.version.cuda, torch.cuda.is_available(), torch.cuda.get_device_name(0))"
+python -c "import mmcv, mmdet, mmpose; print(mmcv.__version__, mmdet.__version__, mmpose.__version__)"
+```
+
+连续图片输入：
+
+```bash
+estimate-pose2d-images /root/autodl-tmp/input/sequence --media-config configs/media_decode.yaml --pose2d-config configs/pose2d.yaml --frames-output /root/autodl-tmp/results/pose2d_frames.jsonl --summary-output /root/autodl-tmp/results/pose2d_summary.json
+```
+
+视频输入：
+
+```bash
+estimate-pose2d-video /root/autodl-tmp/input/input.mp4 --media-config configs/media_decode.yaml --pose2d-config configs/pose2d.yaml --frames-output /root/autodl-tmp/results/pose2d_frames.jsonl --summary-output /root/autodl-tmp/results/pose2d_summary.json
+```
+
+AutoDL配置中的逐帧叠加图写入`/root/autodl-tmp/visualizations/pose2d/<video_id>/`。运行前必须准备匹配的PyTorch、MMCV、MMDetection、MMPose环境，以及配置中指定的本地权重。
+
 ## 自动化测试
 
 ```powershell

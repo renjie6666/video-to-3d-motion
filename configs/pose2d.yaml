@@ -1,0 +1,49 @@
+pipeline_mode: baseline
+
+pose2d:
+  active_model: rtmpose_m
+  models:
+    rtmpose_m:
+      config:
+        baseline: /root/mmpose/configs/body_2d_keypoint/rtmpose/coco/rtmpose-m_8xb256-420e_coco-256x192.py
+        full: /root/video-to-3d-motion/configs/project/h36m17/rtmpose-m_256x192.py
+      checkpoint:
+        baseline: /root/autodl-tmp/checkpoints/rtmpose-m_256x192.pth
+        full: /root/autodl-tmp/checkpoints/rtmpose-m_h36m17.pth
+      joint_schema:
+        baseline: coco17
+        full: h36m17
+      score_source: rtmpose_simcc
+
+detection:
+  bbox_source: external_or_detector
+  score_threshold: 0.30
+  nms_iou_threshold: 0.65
+  min_bbox_area: 256
+  strict_single_person: true
+  detector_config: /root/mmdetection/configs/rtmdet/rtmdet_m_8xb32-300e_coco.py
+  detector_checkpoint: /root/autodl-tmp/checkpoints/rtmdet-m.pth
+  person_class_id: 0
+
+batch:
+  max_size: 27
+  prefetch_batches: 2
+  input_queue_capacity: 54
+  output_queue_capacity: 54
+  put_timeout_seconds: 0.5
+
+runtime:
+  amp: false
+  keypoint_score_threshold: 0.20
+
+visualization:
+  enabled: true
+  output_root: /root/autodl-tmp/visualizations/pose2d
+  image_format: jpg
+  jpeg_quality: 95
+  draw_bbox: true
+  draw_skeleton: true
+  draw_joint_index: false
+  draw_frame_info: true
+  every_n_frames: 1
+  strict: true
