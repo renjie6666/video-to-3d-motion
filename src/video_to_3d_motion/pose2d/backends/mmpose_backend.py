@@ -76,6 +76,8 @@ class MMPoseEstimator:
                     f"expected one pose result, got {len(results)}",
                 )
             instances = results[0].pred_instances
+            # TopdownPoseEstimator.add_pred_to_datasample already restores
+            # crop/input coordinates to original-image pixels. Do not invert twice.
             keypoints = _numpy(instances.keypoints)
             scores = _numpy(instances.keypoint_scores)
             if keypoints.ndim == 3:

@@ -36,6 +36,48 @@ def touch_sequence(directory: Path, names: list[str]) -> None:
 
 
 class ImageSequenceDecoderTests(unittest.TestCase):
+    def test_sparse_images_emit_once_and_preserve_source_ids_and_times(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            touch_sequence(root, ["seq_002066.jpg", "seq_000015.jpg", "seq_000040.jpg"])
+            image_config = ImageSequenceConfig(source_fps=25, require_contiguous=False)
+            decoder = ImageSequenceDecoder(image_config, image_loader=FakeImageLoader())
+            config = AppConfig(
+                media=MediaConfig(target_fps=50),
+                image_sequence=image_config,
+                queue=QueueConfig(capacity=8),
+            )
+            output_queue = queue.Queue(maxsize=8)
+            result = FrameTaskProducer(config, decoder).run(
+                root, output_queue, threading.Event(), "seq"
+            )
+            items = []
+            while not output_queue.empty():
+                items.append(output_queue.get_nowait())
+            tasks = [item for item in items if isinstance(item, FrameTask)]
+            self.assertEqual(result.status, "completed")
+            self.assertEqual(result.metrics.decoded_frames, 3)
+            self.assertEqual(result.metrics.emitted_frames, 3)
+            self.assertEqual([task.frame_id for task in tasks], [1, 2, 3])
+            self.assertEqual([task.source_frame_id for task in tasks], [15, 40, 2066])
+            self.assertEqual([task.timestamp for task in tasks], [0.0, 1.0, 82.04])
+            self.assertEqual([task.source_timestamp for task in tasks], [0.0, 1.0, 82.04])
+            self.assertIsInstance(items[-1], EndOfVideo)
+            self.assertEqual(items[-1].frame_count, 3)
+
+    def test_max_frames_limits_decode_but_preserves_source_timestamps(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            touch_sequence(root, ["seq_000001.jpg", "seq_000002.jpg", "seq_000003.jpg"])
+            decoder = ImageSequenceDecoder(image_loader=FakeImageLoader(), max_frames=2)
+            info = decoder.probe(root)
+            frames = list(decoder.iter_frames(info))
+            self.assertEqual([frame.source_frame_id for frame in frames], [1, 2])
+            self.assertEqual([frame.source_timestamp for frame in frames], [0.0, 0.02])
+            self.assertEqual(info.duration_seconds, 0.04)
+        with self.assertRaisesRegex(ValueError, "positive"):
+            ImageSequenceDecoder(max_frames=0)
+
     def test_numeric_sort_and_timestamps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -62,6 +104,7 @@ class ImageSequenceDecoderTests(unittest.TestCase):
             with self.assertRaises(MediaPipelineError) as context:
                 decoder.probe(root)
             self.assertEqual(context.exception.code, "frame_start_invalid")
+
     def test_missing_frame_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

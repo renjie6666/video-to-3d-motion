@@ -44,13 +44,17 @@ class MMDetPersonDetector:
     def detect_batch(self, images: list[np.ndarray]) -> list[list[PersonBBox]]:
         try:
             from mmdet.apis import inference_detector
+            from mmengine.registry import DefaultScope
         except ImportError as exc:
             raise Pose2DError(
                 "openmmlab_import_failed", "MMDetection is not installed"
             ) from exc
         output: list[list[PersonBBox]] = []
         for image in images:
-            result = inference_detector(self.model, image)
+            # MMPose initialization changes MMEngine's default scope. Detection
+            # transforms must be built in mmdet even when both models coexist.
+            with DefaultScope.overwrite_default_scope("mmdet"):
+                result = inference_detector(self.model, image)
             instances = result.pred_instances
             bboxes = _numpy(instances.bboxes).astype(np.float32, copy=False)
             scores = _numpy(instances.scores).astype(np.float32, copy=False)

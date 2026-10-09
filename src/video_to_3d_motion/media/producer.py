@@ -55,15 +55,23 @@ class FrameTaskProducer:
 
         try:
             info = self.decoder.probe(video_path)
+            sparse_images = (
+                info.path.is_dir()
+                and not self.config.image_sequence.require_contiguous
+            )
             minimum_fps = self.config.media.target_fps - self.config.media.fps_tolerance
-            if self.config.media.fail_on_low_fps and info.source_fps < minimum_fps:
+            if (
+                not sparse_images
+                and self.config.media.fail_on_low_fps
+                and info.source_fps < minimum_fps
+            ):
                 raise MediaPipelineError(
                     "fps_too_low",
                     f"source FPS {info.source_fps:.3f} is below target "
                     f"{self.config.media.target_fps}",
                 )
 
-            sampler = FrameSampler(
+            sampler = None if sparse_images else FrameSampler(
                 target_fps=self.config.media.target_fps,
                 tolerance_ms=self.config.media.timestamp_tolerance_ms,
             )
@@ -72,6 +80,16 @@ class FrameTaskProducer:
                 metrics.decoded_frames += 1
                 if decoded.timestamp_source == "fps_fallback":
                     metrics.pts_fallback_frames += 1
+                if sampler is None:
+                    # Evaluate each supplied image once, keeping its actual
+                    # source time instead of filling a continuous FPS timeline.
+                    task = self._to_task(
+                        decoded, metrics.emitted_frames + 1,
+                        decoded.source_timestamp, resolved_video_id,
+                    )
+                    self._publish(task, output_queue, stop_event, metrics)
+                    metrics.emitted_frames += 1
+                    continue
                 for sampled in sampler.push(decoded):
                     task = self._to_task(
                         sampled.decoded,
@@ -82,15 +100,16 @@ class FrameTaskProducer:
                     self._publish(task, output_queue, stop_event, metrics)
                     metrics.emitted_frames += 1
 
-            for sampled in sampler.flush():
-                task = self._to_task(
-                    sampled.decoded,
-                    sampled.frame_id,
-                    sampled.timestamp,
-                    resolved_video_id,
-                )
-                self._publish(task, output_queue, stop_event, metrics)
-                metrics.emitted_frames += 1
+            if sampler is not None:
+                for sampled in sampler.flush():
+                    task = self._to_task(
+                        sampled.decoded,
+                        sampled.frame_id,
+                        sampled.timestamp,
+                        resolved_video_id,
+                    )
+                    self._publish(task, output_queue, stop_event, metrics)
+                    metrics.emitted_frames += 1
 
             self._publish(
                 EndOfVideo(resolved_video_id, metrics.emitted_frames),

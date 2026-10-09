@@ -1,0 +1,14 @@
+# Windows / Python 3.10 / CUDA 11.8 runtime.
+# Install torch and torchvision from the official cu118 index first.
+# Install the MMCV CUDA wheel explicitly; do not substitute mmcv-lite.
+numpy==1.26.4
+torch==2.1.2
+torchvision==0.16.2
+mmengine==0.10.7
+mmcv==2.1.0
+mmdet==3.3.0
+mmpose==1.3.2
+# Newer OpenCV releases require NumPy 2; this environment uses NumPy 1.
+opencv-python==4.10.0.84
+# chumpy's legacy build needs pip available and cannot use modern setuptools.
+setuptools==80.9.0

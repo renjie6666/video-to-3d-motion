@@ -5,18 +5,30 @@
 __pycache__/
 *.py[cod]
 .venv/
+.python-gpu/
+.uv-cache/
 venv/
+.pytest_cache/
+build/
+dist/
 
 # Experiment outputs and model artifacts
 data/
-datasets/
+/datasets/
 outputs/
 checkpoints/
 weights/
 wandb/
+work/
+.annotation_cache/
 *.ckpt
 *.pth
 *.pt
+*.onnx
+*.engine
+*.pkl
+*.npy
+*.npz
 
 # Secrets and local environment files
 .env
@@ -33,5 +45,6 @@ human3.6mtoolbox处理后的/
 
 results/*
 !results/.gitkeep
+tools/results/
 resources/pose2d_visualizations/
 *.egg-info/

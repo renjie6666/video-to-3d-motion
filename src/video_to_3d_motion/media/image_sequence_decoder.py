@@ -74,8 +74,13 @@ class ImageSequenceDecoder:
         self,
         config: ImageSequenceConfig | None = None,
         image_loader: ImageLoader = decode_image_bgr,
+        *,
+        max_frames: int | None = None,
     ) -> None:
+        if max_frames is not None and max_frames <= 0:
+            raise ValueError("max_frames must be positive")
         self.config = config or ImageSequenceConfig()
+        self.max_frames = max_frames
         self.image_loader = image_loader
         self._frame_regex = re.compile(self.config.frame_pattern, re.IGNORECASE)
         self._manifest_cache: dict[Path, ImageSequenceManifest] = {}
@@ -173,6 +178,9 @@ class ImageSequenceDecoder:
         entries.sort(key=lambda item: item.source_frame_id)
         if self.config.require_contiguous:
             self._validate_continuity(entries)
+
+        if self.max_frames is not None:
+            entries = entries[:self.max_frames]
 
         first_image = self._load_and_validate_image(entries[0].path)
         height, width = first_image.shape[:2]

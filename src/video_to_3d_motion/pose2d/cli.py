@@ -7,7 +7,7 @@ import json
 import queue
 import sys
 import threading
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 
 from video_to_3d_motion.media.config import load_config
@@ -16,12 +16,14 @@ from video_to_3d_motion.media.models import QueueItem
 from video_to_3d_motion.media.producer import FrameTaskProducer
 
 from .config import load_pose2d_config
+from .comparison import run_comparison
+from .h36m_annotations import load_sequence_annotations
 from .factory import create_gpu_worker
 from .models import EndOfPose2D, Pose2DFailure, Pose2DFrame, Pose2DOutputItem
 from .worker import Pose2DWorker
 
 
-def _parser(description: str, source_help: str) -> argparse.ArgumentParser:
+def _parser(description: str, source_help: str, *, image_sequence: bool = False) -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument("source", type=Path, help=source_help)
     parser.add_argument("--media-config", type=Path, required=True)
@@ -29,10 +31,18 @@ def _parser(description: str, source_help: str) -> argparse.ArgumentParser:
     parser.add_argument("--video-id")
     parser.add_argument("--frames-output", type=Path, required=True)
     parser.add_argument("--summary-output", type=Path, required=True)
+    parser.add_argument("--person-selection", choices=("strict", "highest_score"),
+                        help="override YAML single-person policy; highest_score is for known single-person sequences")
+    if image_sequence:
+        parser.add_argument("--max-frames", type=int, help="process only the first N images for a smoke test")
+        parser.add_argument("--annotations", type=Path, help="H36M train/validation pickle for comparison side output")
+        parser.add_argument("--comparison-output", type=Path, help="comparison directory (default: summary directory/h36m_comparison)")
+        parser.add_argument("--comparison-every-n-frames", type=int, default=1,
+                            help="write one comparison overlay per N frames; all frames still appear in CSV")
     return parser
 
 
-def _record(pose: Pose2DFrame) -> dict[str, object]:
+def _record(pose: Pose2DFrame, source: Path | None = None) -> dict[str, object]:
     return {
         "video_id": pose.video_id,
         "frame_id": pose.frame_id,
@@ -41,6 +51,8 @@ def _record(pose: Pose2DFrame) -> dict[str, object]:
         "source_timestamp": pose.source_timestamp,
         "timestamp_source": pose.timestamp_source,
         "image_size": list(pose.image_size),
+        "coordinate_space": "original_image_pixels",
+        "source_path": str(source.resolve()) if source else None,
         "fps": pose.fps,
         "keypoints": pose.keypoints.tolist(),
         "keypoint_scores_raw": pose.keypoint_scores_raw.tolist(),
@@ -62,8 +74,20 @@ def _record(pose: Pose2DFrame) -> dict[str, object]:
 def _run(args, *, image_sequence: bool) -> int:
     media_config = load_config(args.media_config)
     pose_config = load_pose2d_config(args.pose2d_config)
+    if args.person_selection:
+        pose_config = replace(pose_config, detection=replace(
+            pose_config.detection, strict_single_person=args.person_selection == "strict"
+        ))
+    selection = "strict" if pose_config.detection.strict_single_person else "highest_score"
+    if image_sequence:
+        if args.comparison_output and not args.annotations:
+            raise ValueError("--comparison-output requires --annotations")
+        if args.comparison_every_n_frames <= 0:
+            raise ValueError("--comparison-every-n-frames must be positive")
+        if args.annotations and not load_sequence_annotations(args.annotations, args.source):
+            raise ValueError("no matching annotations; check the sequence and train/validation split")
     decoder = (
-        ImageSequenceDecoder(media_config.image_sequence)
+        ImageSequenceDecoder(media_config.image_sequence, max_frames=args.max_frames)
         if image_sequence
         else None
     )
@@ -103,7 +127,9 @@ def _run(args, *, image_sequence: bool) -> int:
                 item = pose_queue.get()
                 try:
                     if isinstance(item, Pose2DFrame):
-                        stream.write(json.dumps(_record(item), ensure_ascii=False) + "\n")
+                        record = _record(item, args.source)
+                        record["bbox_selection"] = selection
+                        stream.write(json.dumps(record, ensure_ascii=False) + "\n")
                         records_written += 1
                         if records_written == 1 or records_written % 50 == 0:
                             print(f"Pose2D: {records_written} frames", file=sys.stderr)
@@ -131,6 +157,13 @@ def _run(args, *, image_sequence: bool) -> int:
         "producer_metrics": asdict(producer_result.metrics) if producer_result else None,
         "pose2d_metrics": asdict(pose_result.metrics) if pose_result else None,
         "model": pose_config.model.name,
+        "detection": {
+            "bbox_source": pose_config.detection.bbox_source,
+            "person_selection": selection,
+            "score_threshold": pose_config.detection.score_threshold,
+            "detector_config": str(pose_config.detection.detector_config),
+            "detector_checkpoint": str(pose_config.detection.detector_checkpoint),
+        },
         "records_written": records_written,
         "frames_output": str(args.frames_output),
         "visualization_root": (
@@ -140,6 +173,17 @@ def _run(args, *, image_sequence: bool) -> int:
         ),
         "terminal_message": type(terminal).__name__ if terminal else None,
     }
+    if image_sequence and args.annotations and summary["status"] == "completed":
+        try:
+            print("Pose2D: writing H36M comparison side output", file=sys.stderr)
+            summary["comparison"] = run_comparison(
+                args.source, args.frames_output, args.annotations,
+                args.comparison_output or args.summary_output.parent / "h36m_comparison",
+                every_n_frames=args.comparison_every_n_frames,
+            )
+        except Exception as exc:
+            summary["inference_status"] = "completed"
+            summary.update(status="failed", error_code="comparison_failed", message=str(exc))
     args.summary_output.parent.mkdir(parents=True, exist_ok=True)
     args.summary_output.write_text(
         json.dumps(summary, ensure_ascii=False, indent=2) + "\n",
@@ -170,6 +214,7 @@ def images_main() -> int:
     args = _parser(
         "Run the S1-01 to S1-02 development chain on an image sequence",
         "path to one ordered JPEG/PNG sequence directory",
+        image_sequence=True,
     ).parse_args()
     return _run(args, image_sequence=True)
 

@@ -14,6 +14,6 @@ image_sequence:
 
 queue:
   batch_size: 27
-  prefetch_batches: 2
-  capacity: 54
+  prefetch_batches: 4
+  capacity: 108
   put_timeout_seconds: 0.5

@@ -108,14 +108,20 @@ class Pose2DConfig:
     def __post_init__(self) -> None:
         if self.pipeline_mode not in {"baseline", "full"}:
             raise ValueError("pipeline_mode must be baseline or full")
-        expected = "coco17" if self.pipeline_mode == "baseline" else "h36m17"
-        if self.model.joint_schema != expected:
-            raise ValueError(
-                f"{self.pipeline_mode} requires joint_schema={expected}"
-            )
+        if self.model.joint_schema not in {"coco17", "h36m17"}:
+            raise ValueError("joint_schema must be coco17 or h36m17")
+        # Baseline describes the experiment mode, not the checkpoint's joints.
+        # A public H36M-finetuned checkpoint can also serve as the baseline.
+        if self.pipeline_mode == "full" and self.model.joint_schema != "h36m17":
+            raise ValueError("full requires joint_schema=h36m17")
 
 
-def _selected_model(raw: dict[str, Any], mode: str) -> ModelConfig:
+def _resolve_path(value: str | Path, base_dir: Path) -> Path:
+    path = Path(value)
+    return path if path.is_absolute() else (base_dir / path).resolve()
+
+
+def _selected_model(raw: dict[str, Any], mode: str, base_dir: Path) -> ModelConfig:
     pose_raw = dict(raw.get("pose2d", {}))
     name = str(pose_raw.get("active_model", "rtmpose_m"))
     models = dict(pose_raw.get("models", {}))
@@ -131,7 +137,7 @@ def _selected_model(raw: dict[str, Any], mode: str) -> ModelConfig:
         value = selected.get(key)
         if isinstance(value, dict):
             value = value.get(mode)
-        return Path(value) if value else None
+        return _resolve_path(value, base_dir) if value else None
 
     return ModelConfig(
         name=name,
@@ -152,7 +158,9 @@ def load_pose2d_config(path: str | Path) -> Pose2DConfig:
         import yaml
     except ImportError as exc:
         raise RuntimeError("PyYAML is required to load pose2d config") from exc
-    with Path(path).open("r", encoding="utf-8") as stream:
+    config_path = Path(path).resolve()
+    base_dir = config_path.parent
+    with config_path.open("r", encoding="utf-8") as stream:
         raw: dict[str, Any] = yaml.safe_load(stream) or {}
 
     mode = str(raw.get("pipeline_mode", "baseline"))
@@ -160,13 +168,14 @@ def load_pose2d_config(path: str | Path) -> Pose2DConfig:
     detection_raw = dict(raw.get("detection", {}))
     for key in ("detector_config", "detector_checkpoint"):
         if detection_raw.get(key):
-            detection_raw[key] = Path(detection_raw[key])
+            detection_raw[key] = _resolve_path(detection_raw[key], base_dir)
     visualization_raw = dict(raw.get("visualization", {}))
-    if "output_root" in visualization_raw:
-        visualization_raw["output_root"] = Path(visualization_raw["output_root"])
+    visualization_raw["output_root"] = _resolve_path(
+        visualization_raw.get("output_root", "../results/visualizations/pose2d"), base_dir
+    )
     return Pose2DConfig(
         pipeline_mode=mode,
-        model=_selected_model(raw, mode),
+        model=_selected_model(raw, mode, base_dir),
         detection=DetectionConfig(**detection_raw),
         batch=BatchConfig(**raw.get("batch", {})),
         runtime=runtime,
