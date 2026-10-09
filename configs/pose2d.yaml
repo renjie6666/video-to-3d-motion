@@ -49,7 +49,7 @@ batch:
   max_size: 27
   prefetch_batches: 4
   input_queue_capacity: 108
-  output_queue_capacity: 54
+  output_queue_capacity: 108
   put_timeout_seconds: 0.5
 
 runtime:

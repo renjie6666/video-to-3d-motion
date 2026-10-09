@@ -54,7 +54,7 @@ class ImageSequenceConfig:
 @dataclass(frozen=True, slots=True)
 class QueueConfig:
     batch_size: int = 27
-    prefetch_batches: int = 2
+    prefetch_batches: int = 4
     capacity: int | None = None
     put_timeout_seconds: float = 0.5
 
