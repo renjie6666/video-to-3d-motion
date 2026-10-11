@@ -1,0 +1,17 @@
+pipeline_mode: baseline
+
+pose_adapter:
+  clip_len: 243
+  joint_schema: h36m17
+  joint_profile: rtmpose_l_h36m_v1
+  normalization: h36m_width_center_v1
+  low_confidence_policy: keep
+  short_clip_policy: error
+
+queue:
+  window_output_capacity: 2
+  get_timeout_seconds: 0.1
+  put_timeout_seconds: 0.5
+
+archive:
+  enabled: true

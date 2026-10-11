@@ -40,7 +40,7 @@ class BatchConfig:
     max_size: int = 27
     prefetch_batches: int = 4
     input_queue_capacity: int = 108
-    output_queue_capacity: int = 108
+    output_queue_capacity: int = 243
     put_timeout_seconds: float = 0.5
 
     def __post_init__(self) -> None:

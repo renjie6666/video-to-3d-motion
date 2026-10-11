@@ -19,7 +19,7 @@ from .config import load_pose2d_config
 from .comparison import run_comparison
 from .h36m_annotations import load_sequence_annotations
 from .factory import create_gpu_worker
-from .models import EndOfPose2D, Pose2DFailure, Pose2DFrame, Pose2DOutputItem
+from .models import EndOfPose2D, Pose2DFailure, Pose2DFrame, Pose2DMetrics, Pose2DOutputItem, Pose2DResult
 from .worker import Pose2DWorker
 
 
@@ -31,6 +31,8 @@ def _parser(description: str, source_help: str, *, image_sequence: bool = False)
     parser.add_argument("--video-id")
     parser.add_argument("--frames-output", type=Path, required=True)
     parser.add_argument("--summary-output", type=Path, required=True)
+    parser.add_argument("--pose-adapter-config", type=Path, help="optionally connect S1-03")
+    parser.add_argument("--pose-adapter-output", type=Path, help="new S1-03 archive directory")
     parser.add_argument("--person-selection", choices=("strict", "highest_score"),
                         help="override YAML single-person policy; highest_score is for known single-person sequences")
     if image_sequence:
@@ -72,6 +74,10 @@ def _record(pose: Pose2DFrame, source: Path | None = None) -> dict[str, object]:
 
 
 def _run(args, *, image_sequence: bool) -> int:
+    adapter_config_path = getattr(args, "pose_adapter_config", None)
+    adapter_output_path = getattr(args, "pose_adapter_output", None)
+    if bool(adapter_config_path) != bool(adapter_output_path):
+        raise ValueError("--pose-adapter-config and --pose-adapter-output must be provided together")
     media_config = load_config(args.media_config)
     pose_config = load_pose2d_config(args.pose2d_config)
     if args.person_selection:
@@ -103,6 +109,15 @@ def _run(args, *, image_sequence: bool) -> int:
     pose_worker = create_gpu_worker(pose_config)
     producer_results = []
     pose_results = []
+
+    def run_pose_worker():
+        try:
+            pose_results.append(pose_worker.run(frame_queue, pose_queue, stop_event))
+        except Exception as exc:
+            stop_event.set()
+            pose_results.append(Pose2DResult(sequence_id, "failed", Pose2DMetrics(),
+                                            error_code="pose2d_failed", message=str(exc)))
+
     producer_thread = threading.Thread(
         target=lambda: producer_results.append(
             producer.run(args.source, frame_queue, stop_event, sequence_id)
@@ -110,41 +125,85 @@ def _run(args, *, image_sequence: bool) -> int:
         name="frame-task-producer",
     )
     pose_thread = threading.Thread(
-        target=lambda: pose_results.append(
-            pose_worker.run(frame_queue, pose_queue, stop_event)
-        ),
+        target=run_pose_worker,
         name="pose2d-worker",
     )
 
     args.frames_output.parent.mkdir(parents=True, exist_ok=True)
     terminal: EndOfPose2D | Pose2DFailure | None = None
     records_written = 0
+    adapter_thread = None
+    adapter_results = []
+    adapter_archive = None
+    pipeline_error = None
+    if adapter_config_path:
+        from video_to_3d_motion.pose_adapter.archive import WindowArchive
+        from video_to_3d_motion.pose_adapter.config import load_pose_adapter_config
+        from video_to_3d_motion.pose_adapter.models import EndOfPoseAdapter, PoseAdapterFailure
+        from video_to_3d_motion.pose_adapter.worker import PoseAdapterWorker
+
+        adapter_config = load_pose_adapter_config(adapter_config_path)
+        adapter_archive = WindowArchive(adapter_output_path, adapter_config)
+        window_queue = queue.Queue(maxsize=adapter_config.queue.window_output_capacity)
     pose_thread.start()
     producer_thread.start()
     try:
         with args.frames_output.open("w", encoding="utf-8", newline="\n") as stream:
+            def record_pose(item):
+                nonlocal records_written
+                record = _record(item, args.source)
+                record["bbox_selection"] = selection
+                stream.write(json.dumps(record, ensure_ascii=False) + "\n")
+                records_written += 1
+                if records_written == 1 or records_written % 50 == 0:
+                    print(f"Pose2D: {records_written} frames", file=sys.stderr)
+
+            consumed_queue = pose_queue
+            if adapter_archive is not None:
+                adapter_worker = PoseAdapterWorker(adapter_config, record_frame=record_pose)
+                adapter_thread = threading.Thread(
+                    target=lambda: adapter_results.append(adapter_worker.run(pose_queue, window_queue, stop_event)),
+                    name="pose-adapter-worker",
+                )
+                consumed_queue = window_queue
+                adapter_thread.start()
             while terminal is None:
-                item = pose_queue.get()
                 try:
-                    if isinstance(item, Pose2DFrame):
-                        record = _record(item, args.source)
-                        record["bbox_selection"] = selection
-                        stream.write(json.dumps(record, ensure_ascii=False) + "\n")
-                        records_written += 1
-                        if records_written == 1 or records_written % 50 == 0:
-                            print(f"Pose2D: {records_written} frames", file=sys.stderr)
+                    item = consumed_queue.get(timeout=0.1)
+                except queue.Empty:
+                    if ((not pose_thread.is_alive() and not pose_results)
+                            or (not producer_thread.is_alive() and not producer_results)):
+                        stop_event.set()
+                    active_thread = adapter_thread or pose_thread
+                    if not active_thread.is_alive():
+                        break
+                    continue
+                try:
+                    if adapter_archive is not None:
+                        adapter_archive.emit(item)
+                        if isinstance(item, (EndOfPoseAdapter, PoseAdapterFailure)):
+                            terminal = item
+                    elif isinstance(item, Pose2DFrame):
+                        record_pose(item)
                     else:
                         terminal = item
                 finally:
-                    pose_queue.task_done()
+                    consumed_queue.task_done()
     except KeyboardInterrupt:
         stop_event.set()
+    except Exception as exc:
+        stop_event.set()
+        if adapter_archive is None:
+            raise
+        pipeline_error = exc
     except BaseException:
         stop_event.set()
         raise
     finally:
         producer_thread.join()
         pose_thread.join()
+        if adapter_thread is not None and adapter_thread.ident is not None:
+            adapter_thread.join()
 
     producer_result = producer_results[0] if producer_results else None
     pose_result = pose_results[0] if pose_results else None
@@ -173,6 +232,28 @@ def _run(args, *, image_sequence: bool) -> int:
         ),
         "terminal_message": type(terminal).__name__ if terminal else None,
     }
+    if adapter_archive is not None:
+        from video_to_3d_motion.pose_adapter.models import PoseAdapterResult
+
+        adapter_result = adapter_results[0] if adapter_results else PoseAdapterResult(
+            sequence_id, "failed", error_code="worker_missing", message="S1-03 worker did not return")
+        if pose_result and pose_result.status == "failed" and adapter_result.status != "completed":
+            adapter_result.status = "failed"
+            adapter_result.error_code = "upstream_failed"
+            adapter_result.message = f"{pose_result.error_code}: {pose_result.message}"
+        if pipeline_error is not None:
+            adapter_result.status = "failed"
+            adapter_result.error_code = getattr(pipeline_error, "code", "archive_write_failed")
+            adapter_result.message = str(pipeline_error)
+        adapter_summary_path = adapter_archive.finish(
+            adapter_result, source=str(args.source.resolve()), input=str(args.frames_output.resolve()))
+        summary["pose_adapter"] = dict(asdict(adapter_result), summary_output=str(adapter_summary_path))
+        # Describe the S1-02 terminal separately from the adapter terminal.
+        summary["terminal_message"] = "EndOfPose2D" if pose_result and pose_result.status == "completed" else "Pose2DFailure"
+        if adapter_result.status != "completed":
+            summary["inference_status"] = summary["status"]
+            summary.update(status=adapter_result.status, error_code=adapter_result.error_code,
+                           message=adapter_result.message)
     if image_sequence and args.annotations and summary["status"] == "completed":
         try:
             print("Pose2D: writing H36M comparison side output", file=sys.stderr)
