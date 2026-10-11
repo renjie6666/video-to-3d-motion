@@ -55,9 +55,12 @@ decode-images = "video_to_3d_motion.media.cli:images_main"
 estimate-pose2d-video = "video_to_3d_motion.pose2d.cli:video_main"
 estimate-pose2d-images = "video_to_3d_motion.pose2d.cli:images_main"
 adapt-pose2d-jsonl = "video_to_3d_motion.pose_adapter.cli:main"
+lift-pose3d = "video_to_3d_motion.pose3d.cli:main"
+compare-pose3d = "video_to_3d_motion.stage_output.compare:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
 [tool.setuptools.package-data]
 "video_to_3d_motion.pose3d.vendor" = ["LICENSE", "NOTICE"]
+"video_to_3d_motion.stage_output" = ["viewer.html"]
