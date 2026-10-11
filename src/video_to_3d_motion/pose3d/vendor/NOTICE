@@ -1,0 +1,12 @@
+PoseMamba inference source, Apache-2.0.
+Upstream: https://github.com/nankingjing/PoseMamba
+Source revision: df38d599212c058259f473464baec66d6a6487e0
+Original files: lib/model/PoseMamba.py, lib/model/mambablocks.py,
+CrossScan_plus_poselimbs and CrossMerge_plus_poselimbs from lib/model/csms6s.py.
+
+Local modifications (2026-10-10): package-relative imports; unused training,
+profiling, timm and Triton dependencies removed; only the released L forward
+variant is supported; evaluation-only DropPath; selective scan implemented with
+PyTorch affine-prefix recurrence for Windows. Network parameter names and shapes
+are preserved and weights load strictly. This inference backend is tested against
+an independent serial recurrence, not the upstream compiled CUDA extension.

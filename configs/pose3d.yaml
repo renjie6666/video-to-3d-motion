@@ -1,0 +1,20 @@
+pipeline_mode: baseline
+clip_len: 243
+window_stride: 81
+
+model:
+  checkpoint: ../checkpoints/PoseMamba_L.bin
+  checkpoint_sha256: 031a033dbb4266f093d048e55758e55025c663f65db8d84291b6116794124501
+  device: cuda:0
+  flip_test: true
+
+output:
+  obs_len: 10
+  smoothing: none
+  tau_seconds: 0.04
+
+# Enable evaluation through --annotations/--annotation-names/--sequence.
+evaluation:
+  annotation_h5: null
+  annotation_names: null
+  sequence: null
