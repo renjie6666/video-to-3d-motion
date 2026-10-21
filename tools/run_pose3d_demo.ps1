@@ -20,8 +20,8 @@ $parameters = @{
     OutputDir = $OutputDir
     Mode = $Mode
     Smoothing = $Smoothing
-    Annotations = Join-Path $projectRoot 'datasets/h36m_annot/h36m/annot/valid.h5'
-    AnnotationNames = Join-Path $projectRoot 'datasets/h36m_annot/h36m/annot/valid_images.txt'
+    Annotations = Join-Path $projectRoot 'datasets/Human3.6M/h36m_annot/h36m/annot/valid.h5'
+    AnnotationNames = Join-Path $projectRoot 'datasets/Human3.6M/h36m_annot/h36m/annot/valid_images.txt'
     Sequence = $sequence
     ImageDir = Join-Path $projectRoot "results/s9_generalization_directions_1_54138969/input/$sequence"
 }

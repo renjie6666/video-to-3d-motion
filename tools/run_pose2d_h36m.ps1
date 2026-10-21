@@ -15,10 +15,10 @@ if (-not (Test-Path -LiteralPath $pythonPath -PathType Leaf)) {
     throw "Project .venv is missing. Run tools\setup_local_gpu.ps1 first."
 }
 if (-not $Sequence) {
-    $Sequence = Join-Path $projectRoot "datasets\s_01_act_02_subact_01_ca_01"
+    $Sequence = Join-Path $projectRoot "datasets\Human3.6M\s_01_act_02_subact_01_ca_01"
 }
 if (-not $Annotations) {
-    $Annotations = Join-Path $projectRoot "datasets\h36m_train.pkl"
+    $Annotations = Join-Path $projectRoot "datasets\Human3.6M\h36m_train.pkl"
 }
 if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $projectRoot "results"

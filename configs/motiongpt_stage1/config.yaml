@@ -1,0 +1,26 @@
+# Paths are relative to this file. Data/model/output directories are ignored.
+paths:
+  motiongpt_source: ../../work/motiongpt_source
+  motioncritic_source: ../../work/motioncritic_source
+  assets: ../../checkpoints/motiongpt_stage1
+  dataset: ../../datasets/HumanML3D
+  output: ../../results/motiongpt_stage1
+device: cuda:0
+seed: 1234
+evaluation:
+  split: test
+  batch_size: 32
+  generation_batch_size: 8
+  repetitions: 20
+  diversity_pairs: 300
+critic:
+  sample_count: 1
+  source_fps: 20
+  target_fps: 20
+  window_frames: 60
+  stride_frames: 60
+  translation_origin: per_window_first_frame
+  smplify_iterations: 100
+  optimizer: adam
+  # Scores depend on the fitting/resampling protocol; retain the fitted inputs.
+  max_fit_rmse_m: 0.10

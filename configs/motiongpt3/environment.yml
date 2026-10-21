@@ -1,0 +1,8 @@
+name: motiongpt3
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - pip
+# Install torch==2.1.2+cu118 from the official cu118 wheel index, then requirements.txt.

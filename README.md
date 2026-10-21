@@ -1,5 +1,11 @@
 # 三阶段方案设计 V3
 
+MotionGPT 文本生成动作与 MotionCritic 补充评测的独立复现入口见 [MotionGPT 第一阶段复现](docs/MotionGPT_第一阶段复现.md)。该实验使用专用 Conda 环境，数据分别放在 `datasets/Human3.6M/` 和 `datasets/HumanML3D/`。
+
+五条留出条件的感知评分与后续小规模奖励微调见 [MotionGPT 第二阶段奖励试跑](docs/MotionGPT_第二阶段奖励试跑.md)。本地回放页面为 `results/motiongpt_stage1/experiment_viewer.html`，显示常用指标、逐条感知分数及已生成的动作。
+
+MotionGPT3 的独立 Conda 环境和固定相同测试条件的复现流程见 [MotionGPT3 相同样本对照](docs/MotionGPT3_相同样本对照.md)。对应三侧动作回放页面为 `results/motiongpt3_comparison/experiment_viewer.html`。
+
 | 文档 | 状态 |
 | --- | --- |
 | [01 阶段一：三维人体姿态估计方案设计](docs/01_阶段一_三维人体姿态估计方案设计.md) | V3.16设计稿 |
@@ -85,7 +91,7 @@ estimate-pose2d-video /root/autodl-tmp/input/input.mp4 --media-config configs/me
 
 `decode-images`只验证S1-01。完整链路使用`estimate-pose2d-images`：同一个进程内启动S1-01生产者和S1-02消费者，通过有界队列传递带原图像素的`FrameTask`，随后通过另一个队列输出`Pose2DFrame`。不需要先运行解码命令，也不需要把解码JSONL再读回来。
 
-为当前放在`datasets/`的序列和训练标注提供了启动脚本。在项目根目录运行：
+为当前放在`datasets/Human3.6M/`的序列和训练标注提供了启动脚本。在项目根目录运行：
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File tools\run_pose2d_h36m.ps1
@@ -97,7 +103,7 @@ powershell -ExecutionPolicy Bypass -File tools\run_pose2d_h36m.ps1
 powershell -ExecutionPolicy Bypass -File tools\run_pose2d_h36m.ps1 -MaxFrames 30 -OutputDirectory results\h36m_smoke
 ```
 
-脚本默认使用项目的`.venv`、`configs/pose2d.yaml`、`datasets/s_01_act_02_subact_01_ca_01/`和`datasets/h36m_train.pkl`。每次在`results/<active_model>_<北京时间>/`新建独立目录，避免覆盖。可以通过`-Sequence`、`-Annotations`、`-OutputDirectory`、`-Pose2DConfig`指定其他路径；`-OutputDirectory`现在表示实验根目录，其下每次新建实验子目录并维护两张总表。`-MaxFrames`默认为0，处理所有图片。`-ComparisonEveryNFrames 10`只减少对照图片的数量，所有推理帧仍参与表格对比。
+脚本默认使用项目的`.venv`、`configs/pose2d.yaml`、`datasets/Human3.6M/s_01_act_02_subact_01_ca_01/`和`datasets/Human3.6M/h36m_train.pkl`。每次在`results/<active_model>_<北京时间>/`新建独立目录，避免覆盖。可以通过`-Sequence`、`-Annotations`、`-OutputDirectory`、`-Pose2DConfig`指定其他路径；`-OutputDirectory`现在表示实验根目录，其下每次新建实验子目录并维护两张总表。`-MaxFrames`默认为0，处理所有图片。`-ComparisonEveryNFrames 10`只减少对照图片的数量，所有推理帧仍参与表格对比。
 
 对于已经抽样的稀疏图片序列，在媒体配置中设置`image_sequence.require_contiguous: false`，通过通用命令的`--media-config`指定该配置。此模式对每张图片仅处理一次，保留源帧号和源时间戳，不填补缺帧，也不按目标FPS重采样；它适合逐帧二维效果对比，接入下游时序模型前还需处理时间间隔。
 
@@ -136,9 +142,9 @@ H36M专用脚本默认`-PersonSelection highest_score`，针对已知单人序�
 
 ```powershell
 .\.venv\Scripts\python.exe tools\run_h36m_comparison.py `
-  datasets\s_01_act_02_subact_01_ca_01 `
+  datasets\Human3.6M\s_01_act_02_subact_01_ca_01 `
   --frames-output results\pose2d_h36m\pose2d_frames.jsonl `
-  --annotations datasets\h36m_train.pkl `
+  --annotations datasets\Human3.6M\h36m_train.pkl `
   --output results\pose2d_h36m\comparison
 ```
 

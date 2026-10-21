@@ -1,0 +1,22 @@
+# A functional pilot, not a statistically supported fine-tuning experiment.
+stage1_config: ../motiongpt_stage1/config.yaml
+panel: ../../results/motiongpt_stage1/critic_panel_five.json
+output: ../../results/motiongpt_stage2/pilot
+seed: 4321
+train_prompts: 1
+candidates_per_prompt: 2
+max_candidate_attempts: 6
+max_new_tokens: 64
+sampling:
+  top_k: 0
+  top_p: 1.0
+  temperature: 1.0
+lora:
+  rank: 4
+  alpha: 8.0
+learning_rate: 0.0001
+update_steps: 2
+clip_range: 0.2
+kl_weight: 0.02
+max_grad_norm: 1.0
+note: Test and validation data are held out. Only scoreable training candidates enter this small pilot; rejected generations are recorded.
